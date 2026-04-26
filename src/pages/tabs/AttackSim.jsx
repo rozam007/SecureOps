@@ -5,8 +5,9 @@ const ATTACKS = {
   dos: {
     name: 'DoS Simulation',
     icon: '⚡',
-    color: '#ff4d6d',
-    description: 'Simulates a Denial-of-Service flood attack targeting the web server. Demonstrates how high-volume requests exhaust server resources.',
+    color: '#ff3d6b',
+    tag: 'AVAILABILITY',
+    description: 'Simulates a Denial-of-Service SYN flood targeting a web server, exhausting connection resources.',
     steps: [
       '[INIT] Target: 192.168.1.10:80 (Web Application Server)',
       '[SCAN] Checking target availability... ONLINE',
@@ -28,8 +29,9 @@ const ATTACKS = {
   arp: {
     name: 'ARP Spoofing',
     icon: '🔀',
-    color: '#f0a500',
-    description: 'Simulates an ARP cache poisoning attack to intercept traffic between two hosts on the LAN via a Man-in-the-Middle position.',
+    color: '#ffb020',
+    tag: 'INTEGRITY',
+    description: 'Simulates ARP cache poisoning to intercept LAN traffic via a Man-in-the-Middle position.',
     steps: [
       '[INIT] Attacker: 192.168.1.99 | Victim: 192.168.1.5 | Gateway: 192.168.1.1',
       '[SCAN] ARP table of victim before attack:',
@@ -51,8 +53,9 @@ const ATTACKS = {
   sniff: {
     name: 'Packet Sniffing',
     icon: '👁',
-    color: '#58a6ff',
-    description: 'Simulates passive network traffic capture on an unencrypted segment to demonstrate data exposure risks.',
+    color: '#4da6ff',
+    tag: 'CONFIDENTIALITY',
+    description: 'Simulates passive traffic capture on an unencrypted segment to demonstrate data exposure risks.',
     steps: [
       '[INIT] Interface: eth0 | Mode: Promiscuous | Filter: port 80',
       '[SNIF] Capturing packets on 192.168.1.0/24...',
@@ -73,12 +76,36 @@ const ATTACKS = {
   },
 }
 
+function lineColor(line) {
+  if (!line || typeof line !== 'string') return '#e2eaf4'
+  if (line.startsWith('[CRIT]')) return '#ff3d6b'
+  if (line.startsWith('[WARN]')) return '#ffb020'
+  if (line.startsWith('[DFNS]')) return '#06ffa5'
+  if (line.startsWith('[DONE]')) return '#06ffa5'
+  if (line.startsWith('[EXPS]')) return '#ff3d6b'
+  if (line.startsWith('[MITM]')) return '#ffb020'
+  if (line.startsWith('[ATCK]')) return '#ff8c69'
+  if (line.startsWith('[SNIF]')) return '#c084fc'
+  if (line.startsWith('[PKT]'))  return '#94a3b8'
+  if (line.startsWith('[INFO]')) return '#4d5a6b'
+  if (line.startsWith('[SCAN]')) return '#4da6ff'
+  if (line.startsWith('[INIT]')) return '#4da6ff'
+  return '#e2eaf4'
+}
+
+const linePrefix = (line) => {
+  if (!line || typeof line !== 'string') return null
+  const m = line.match(/^\[([A-Z]+)\]/)
+  return m ? m[1] : null
+}
+
 export default function AttackSim() {
   const { addAuditEntry } = useAuth()
   const [active, setActive] = useState(null)
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [done, setDone] = useState(false)
+  const [progress, setProgress] = useState(0)
   const logRef = useRef(null)
   const timerRef = useRef(null)
 
@@ -94,6 +121,7 @@ export default function AttackSim() {
     setLines([])
     setDone(false)
     setRunning(true)
+    setProgress(0)
     addAuditEntry('ATTACK_SIM', `Attack simulation started: ${ATTACKS[key].name}`, 'warning')
 
     const steps = ATTACKS[key].steps
@@ -101,79 +129,133 @@ export default function AttackSim() {
     const next = () => {
       if (i < steps.length) {
         setLines(prev => [...prev, steps[i]])
+        setProgress(Math.round(((i + 1) / steps.length) * 100))
         i++
-        timerRef.current = setTimeout(next, 280 + Math.random() * 200)
+        timerRef.current = setTimeout(next, 260 + Math.random() * 180)
       } else {
         setRunning(false)
         setDone(true)
+        setProgress(100)
         addAuditEntry('ATTACK_SIM_DONE', `Simulation complete: ${ATTACKS[key].name} — defense response logged`, 'info')
       }
     }
     next()
   }
 
-  const reset = () => { setActive(null); setLines([]); setDone(false); setRunning(false) }
-
+  const reset = () => { setActive(null); setLines([]); setDone(false); setRunning(false); setProgress(0) }
   const atk = active ? ATTACKS[active] : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', animation: 'fadeIn 0.3s ease' }}>
       {/* Disclaimer */}
-      <div style={{ background: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', borderRadius: '8px', padding: '12px 16px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-        <span style={{ fontSize: '16px', flexShrink: 0 }}>⚠</span>
-        <p style={{ fontSize: '12px', color: '#f0a500', lineHeight: 1.6 }}>
-          All simulations are educational and non-destructive. No real network traffic is generated. This module demonstrates attack vectors and corresponding defense mechanisms for academic purposes only (NASTP CY103 CCP).
+      <div style={{ background: 'rgba(255,176,32,0.06)', border: '1px solid rgba(255,176,32,0.2)', borderRadius: '8px', padding: '12px 16px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+        <span style={{ fontSize: '14px', flexShrink: 0, marginTop: '1px' }}>⚠</span>
+        <p style={{ fontSize: '11px', color: 'var(--warning)', lineHeight: 1.7, fontFamily: 'var(--mono)' }}>
+          EDUCATIONAL USE ONLY — All simulations are non-destructive. No real network traffic is generated. Demonstrates attack vectors and defense mechanisms for NASTP CY103 CCP.
         </p>
       </div>
 
-      {/* Attack selector */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+      {/* Attack cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
         {Object.entries(ATTACKS).map(([key, a]) => (
           <button
             key={key}
             onClick={() => runSim(key)}
             disabled={running}
             style={{
-              background: active === key ? `${a.color}12` : 'var(--surface)',
-              border: `1px solid ${active === key ? a.color : 'var(--border)'}`,
-              borderRadius: '10px', padding: '18px', cursor: running ? 'not-allowed' : 'pointer',
-              textAlign: 'left', transition: 'all 0.2s', opacity: running && active !== key ? 0.5 : 1,
+              background: active === key
+                ? `linear-gradient(135deg, ${a.color}10, ${a.color}06)`
+                : 'var(--surface)',
+              border: `1px solid ${active === key ? a.color + '60' : 'var(--border)'}`,
+              borderRadius: '10px', padding: '18px',
+              cursor: running ? 'not-allowed' : 'pointer',
+              textAlign: 'left', transition: 'all 0.2s',
+              opacity: running && active !== key ? 0.4 : 1,
+              position: 'relative', overflow: 'hidden',
             }}
           >
-            <div style={{ fontSize: '22px', marginBottom: '8px' }}>{a.icon}</div>
+            {active === key && (
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: a.color, opacity: 0.8 }} />
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '20px' }}>{a.icon}</span>
+              <span style={{ fontSize: '9px', color: a.color, background: `${a.color}15`, border: `1px solid ${a.color}30`, borderRadius: '4px', padding: '2px 6px', fontFamily: 'var(--mono)', letterSpacing: '0.06em' }}>{a.tag}</span>
+            </div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: active === key ? a.color : 'var(--text)', marginBottom: '6px' }}>{a.name}</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{a.description}</div>
-            <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-              {a.ciaImpact.c && <span style={badge('#58a6ff')}>Confidentiality</span>}
-              {a.ciaImpact.i && <span style={badge('#00ffaa')}>Integrity</span>}
-              {a.ciaImpact.a && <span style={badge('#f0a500')}>Availability</span>}
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '12px' }}>{a.description}</div>
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {a.ciaImpact.c && <CIABadge label="C" color="#4da6ff" />}
+              {a.ciaImpact.i && <CIABadge label="I" color="#06ffa5" />}
+              {a.ciaImpact.a && <CIABadge label="A" color="#ffb020" />}
             </div>
           </button>
         ))}
       </div>
 
-      {/* Terminal output */}
+      {/* Terminal */}
       {active && (
-        <div style={{ background: 'var(--surface)', border: `1px solid ${atk.color}44`, borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${atk.color}33`, background: `${atk.color}08` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>{atk.icon}</span>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: atk.color }}>{atk.name} — Live Output</span>
-              {running && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: atk.color, animation: 'pulse 1s infinite', display: 'inline-block' }} />}
-              {done && <span style={{ fontSize: '11px', color: '#00ffaa', background: 'rgba(0,255,170,0.1)', padding: '2px 8px', borderRadius: '20px' }}>✓ Complete</span>}
+        <div style={{ background: 'var(--surface)', border: `1px solid ${atk.color}40`, borderRadius: '10px', overflow: 'hidden', animation: 'fadeIn 0.25s ease' }}>
+          {/* Terminal header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: 'var(--surface-2)', borderBottom: `1px solid ${atk.color}25` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Traffic lights */}
+              <div style={{ display: 'flex', gap: '5px' }}>
+                {['#ff5f57','#febc2e','#28c840'].map(c => (
+                  <div key={c} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c, opacity: 0.8 }} />
+                ))}
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
+                secureops@sim:~$ <span style={{ color: atk.color }}>{atk.name.toLowerCase().replace(/ /g, '_')}.sh</span>
+              </span>
             </div>
-            <button onClick={reset} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', padding: '4px 10px' }}>Reset</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {running && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: atk.color, animation: 'pulse 0.8s infinite' }} />
+                  <span style={{ fontSize: '10px', color: atk.color, fontFamily: 'var(--mono)' }}>RUNNING</span>
+                </div>
+              )}
+              {done && <span style={{ fontSize: '10px', color: 'var(--success)', background: 'var(--success-dim)', padding: '2px 8px', borderRadius: '20px', fontFamily: 'var(--mono)' }}>✓ COMPLETE</span>}
+              <button onClick={reset} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '10px', padding: '3px 10px', fontFamily: 'var(--mono)' }}>RESET</button>
+            </div>
           </div>
-          <div ref={logRef} style={{ fontFamily: 'var(--mono)', fontSize: '12px', padding: '16px', height: '280px', overflowY: 'auto', lineHeight: 1.8 }}>
-            {lines.map((line, i) => (
-              <div key={i} style={{ color: lineColor(line) }}>{line}</div>
-            ))}
-            {running && <span style={{ color: atk.color, animation: 'pulse 0.8s infinite' }}>█</span>}
+
+          {/* Progress bar */}
+          <div style={{ height: '2px', background: 'var(--border)' }}>
+            <div style={{ height: '100%', width: `${progress}%`, background: done ? 'var(--success)' : atk.color, transition: 'width 0.3s ease', boxShadow: `0 0 8px ${done ? 'var(--success)' : atk.color}` }} />
           </div>
+
+          {/* Log output */}
+          <div ref={logRef} style={{ fontFamily: 'var(--mono)', fontSize: '12px', padding: '16px', height: '300px', overflowY: 'auto', lineHeight: 2, background: '#050810' }}>
+            {lines.map((line, i) => {
+              const prefix = linePrefix(line)
+              const rest = prefix ? line.slice(prefix.length + 2).trimStart() : line
+              const color = lineColor(line)
+              return (
+                <div key={i} style={{ display: 'flex', gap: '10px', animation: 'slideIn 0.15s ease' }}>
+                  {prefix && (
+                    <span style={{ color, opacity: 0.7, minWidth: '44px', fontSize: '10px', paddingTop: '1px', letterSpacing: '0.04em' }}>[{prefix}]</span>
+                  )}
+                  <span style={{ color }}>{prefix ? rest : line}</span>
+                </div>
+              )
+            })}
+            {running && (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <span style={{ color: atk.color, opacity: 0.7, minWidth: '44px', fontSize: '10px' }}>[SYS]</span>
+                <span style={{ color: atk.color, animation: 'blink 1s infinite' }}>█</span>
+              </div>
+            )}
+          </div>
+
+          {/* Defense summary */}
           {done && (
-            <div style={{ padding: '14px 16px', borderTop: `1px solid ${atk.color}33`, background: 'rgba(0,255,170,0.04)' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Defense Mechanism Applied</div>
-              <p style={{ fontSize: '13px', color: 'var(--text)', lineHeight: 1.6 }}>{atk.defense}</p>
+            <div style={{ padding: '16px', borderTop: `1px solid ${atk.color}25`, background: 'rgba(6,255,165,0.03)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
+                <span style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--mono)' }}>Defense Mechanism Applied</span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.7 }}>{atk.defense}</p>
             </div>
           )}
         </div>
@@ -182,19 +264,11 @@ export default function AttackSim() {
   )
 }
 
-function lineColor(line) {
-  if (line.startsWith('[CRIT]')) return '#ff4d6d'
-  if (line.startsWith('[WARN]')) return '#f0a500'
-  if (line.startsWith('[DFNS]')) return '#00ffaa'
-  if (line.startsWith('[DONE]')) return '#00ffaa'
-  if (line.startsWith('[EXPS]')) return '#ff4d6d'
-  if (line.startsWith('[MITM]')) return '#f0a500'
-  if (line.startsWith('[ATCK]')) return '#ff8c69'
-  if (line.startsWith('[INFO]')) return '#7d8590'
-  return '#e6edf3'
+function CIABadge({ label, color }) {
+  const full = { C: 'Confidentiality', I: 'Integrity', A: 'Availability' }
+  return (
+    <span style={{ fontSize: '10px', color, background: `${color}12`, padding: '2px 8px', borderRadius: '4px', border: `1px solid ${color}25`, fontFamily: 'var(--mono)' }}>
+      {label} · {full[label]}
+    </span>
+  )
 }
-
-const badge = (color) => ({
-  fontSize: '10px', color, background: `${color}18`, padding: '2px 6px',
-  borderRadius: '4px', border: `1px solid ${color}33`,
-})
